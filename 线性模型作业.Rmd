@@ -1,0 +1,339 @@
+---
+title: "线性模型作业"
+author: "统计学院王祖正201511150161"
+date: ""
+output: word_document
+---
+
+```{r}
+library(MASS)
+####产生数据
+betadata<-matrix(c(1,0.8,0.6,0,0,0),6,1)#####产生betadata
+e<-rnorm(100,0,2)####产生误差项
+sigma<-diag(6)####多元正态分布的协方差矩阵
+mu<-matrix(c(0,0,0,0,0,0),6,1)####多元正态分布的均值向量
+x<-mvrnorm(100,mu,sigma)####生成多元正态随机数
+y<-x%*%betadata+e####产生y
+vs<-function(x,y,method)
+{
+    n<-length(x[,1])####读取数据维数
+    if (method==1)
+####Lasso
+    {
+      lamada<-seq(0.2,0.4,0.005) #####给定lamada的范围，遍历lamada
+      m1<-matrix(rep(0,246),6,41) ####生成一个矩阵，存放所有beta的结果
+      gcv<-matrix(rep(0,41),1,41) ####生成一个矩阵，存放所有GCV的结果
+      for (i in 1:41 )  
+        { 
+           lam<-lamada[i] ####先固定一个lamada,经试验,令lamada在(0,1)之间变化,重复多次确定最佳lamada所在区间
+           betadata0<-(solve(t(x)%*%x)%*%t(x))%*%y
+           a<-matrix(rep(0,6),6,1) 
+           while(t(betadata0-a)%*%(betadata0-a)>10^-5)  ####收敛条件:直到前后两次迭代结果小于10^-5，停止循环
+           { 
+               bet<-matrix(rep(0,6),6,1) 
+               for (j in 1:6)
+                 { 
+                    if(abs(betadata0[j,1]<1e-5)) 
+                       betadata0[j,1]<-10^-5
+                       bet[j,1]<-1/abs(beta0[j,1])}####如果beta0中某分量的值太小，则它的倒数取为10^5
+                       beta11<-betadata0-solve((t(x)%*%x)+n*lam*diag(c(bet)))%*%((-t(x))%*%(y-x%*%betadata0)+n*lam*diag(c(bet))%*%betadata0)
+                    for(k in 1:6)
+                      { 
+                         if(abs(beta11[k,1])<0.1)#####如果beta1中某分量的值小,把它取为0,临界值为0.01时正确率约50%,0.001时正确率约为30%，0.1正确率约为70%     
+                            beta11[k,1]<-0 } 
+                            a<-betadata0;
+                            betadata0<-beta11; 
+                      }
+                      m1[,i]<-betadata0 ####输出beta0的结果
+                      bet<-betadata0####便于计算元素为1/β的对角矩阵，把beta0的值赋予bet
+                      for(l in 1:6)
+                        { 
+                            if(abs(betadata0[l,1]<10^-5)) 
+                               bet[l,1]<-10^-5####如果beta0中某分量的值太小，则它的倒数取为10^5  
+                        } 
+                        p<-x%*%solve((t(x)%*%x)+n*lam*diag(c(bet)))%*%t(x)
+                        tr<-sum(diag(p)) 
+                        t1<-t(y-x%*%betadata0)%*%(y-x%*%betadata0) 
+                        gcv[1,i]<-(t(y-x%*%betadata0))%*%(y-x%*%betadata0)/(1-tr/n)^2} 
+                        gcv<-which.min(gcv) #####找到最小的GCV 
+                        betadata1<-m1[,gcv]
+                        return(betadata1)####输出beta
+                 }
+             else if(method==2)####BIC
+                {####一个变量求BIC
+                   q<-1
+                   s<-combn(c(1:6),1)#####从6个变量中选出1个的所有可能结果
+                   m<-array(0,dim<-c(6,n,1))#####产生1个6*n所有元素都是0的矩阵
+                   betta1<-matrix(0,6,6)
+                   BIC1<-c()
+                   for(i in 1:6)
+                     {
+                          m[i, , ]<-cbind(x[,s[1,i]])
+                          xq<-m[i,,]######只用一个变量的xq
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  BIC1[i]<-log(SSeq/n)+q/n*log(n)
+  betta1[i,i]<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+}
+betta1
+BIC1
+####两个变量求BIC
+q<-2
+s<-combn(c(1:6),2)######从6个变量中选出2个的所有可能结果
+m<-array(0,dim<-c(15,n,2))#####产生2个15*n所有元素都是0的矩阵
+BIC2<-c()
+betta2<-matrix(0,6,15)
+for(i in 1:15)
+{
+  m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]])
+  xq<-m[i,,]######用两个变量的xq
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  BIC2[i]<-log(SSeq/n)+q/n*log(n)
+  p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta2[s[1,i],i]<-p[1,1]
+  betta2[s[2,i],i]<-p[2,1]
+}
+BIC2
+betta2
+######三个变量求BIC
+q<-3
+s<-combn(c(1:6),3)######从6个变量中选出3个的所有可能结果
+m<-array(0,dim<-c(20,n,3))#####产生3个20*n所有元素都是0的矩阵
+betta3<-matrix(0,6,20)
+BIC3<-c()
+for(i in 1:20)
+{
+  m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]])
+  xq<-m[i,,]####选三个变量的xq
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  BIC3[i]<-log(SSeq/n)+q/n*log(n)
+  p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta3[s[1,i],i]<-p[1,1]
+  betta3[s[2,i],i]<-p[2,1]
+  betta3[s[3,i],i]<-p[3,1]
+}
+betta3
+BIC3
+####四个变量求BIC
+q<-4
+s<-combn(c(1:6),4)######从6个变量中选出4个的所有可能结果
+m<-array(0,dim<-c(15,n,4))#####产生4个15*n所有元素都是0的矩阵
+betta4<-matrix(0,6,15)
+BIC4<-c()
+for(i in 1:15)
+{
+  m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]],x[,s[4,i]])
+  xq<-m[i,,]####选四个变量的xq
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  BIC4[i]<-log(SSeq/n)+q/n*log(n)
+  p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta4[s[1,i],i]<-p[1,1]
+  betta4[s[2,i],i]<-p[2,1]
+  betta4[s[3,i],i]<-p[3,1]
+  betta4[s[4,i],i]<-p[4,1]
+}
+BIC4
+betta4
+####5个变量求BIC
+q<-5
+BIC5<-c()
+s<-combn(c(1:6),5)
+betta5<-matrix(0,6,6)
+for(i in 1:6)
+{
+  xq<-x[,-i]
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  BIC5[i]<-log(SSeq/n)+q/n*log(n)
+  p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta5[s[1,i],i]<-p[1,1]
+  betta5[s[2,i],i]<-p[2,1]
+  betta5[s[3,i],i]<-p[3,1]
+  betta5[s[4,i],i]<-p[4,1]
+  betta5[s[5,i],i]<-p[5,1]
+}
+BIC5
+betta5
+#####6个变量求BIC
+q<-6
+xq<-x
+SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+BIC6<-log(SSeq/n)+q/n*log(n)
+betta6<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+betta6
+BIC6
+betta<-matrix(c(betta1,betta2,betta3,betta4,betta5,betta6),6,63)
+BIC<-c(BIC1,BIC2,BIC3,BIC4,BIC5,BIC6)
+t<-which.min(BIC)
+beta2<-betta[,t]
+return(beta2)
+}
+else if(method==3)
+{  ####AIC
+  #####一个变量求AIC
+  q<-1
+  betta1<-matrix(0,6,6)
+  s<-combn(c(1:6),1)#####从6个变量中选出1个的所有可能结果
+  m<-array(0,dim<-c(6,n,1))#####产生6个n*1所有元素都是0的矩阵
+  AIC1<-c()
+  for(i in 1:6){
+    m[i, , ]<-cbind(x[,s[1,i]])######只用一个变量的xq
+    xq<-m[i,,]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC1[i]<-n*log(SSeq)+2*q####计算AIC
+    betta1[i,i]<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  }
+  AIC1
+  betta1
+  ####两个变量求AIC
+  q<-2
+  s<-combn(c(1:6),2)#####从6个变量中选出2个的所有可能结果
+  m<-array(0,dim<-c(15,n,2))#####产生2个15*n所有元素都是0的矩阵
+  betta2<-matrix(0,6,15)
+  AIC2<-c()
+  for(i in 1:15){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]])#####两个变量的xq
+    xq<-m[i,,]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC2[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta2[s[1,i],i]<-p[1,1]
+    betta2[s[2,i],i]<-p[2,1]
+  }
+  AIC2
+  betta2
+  ####三个变量求AIC
+  q<-3
+  s<-combn(c(1:6),3)#####从6个变量中选出3个的所有可能结果
+  m<-array(0,dim<-c(20,n,3))#####产生3个20*n所有元素都是0的矩阵
+  betta3<-matrix(0,6,20)
+  AIC3<-c()
+  for(i in 1:20){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]])#####三个变量的xq
+    xq<-m[i,,]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC3[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta3[s[1,i],i]<-p[1,1]
+    betta3[s[2,i],i]<-p[2,1]
+    betta3[s[3,i],i]<-p[3,1]
+  }
+  AIC3
+  betta3
+  #####四个变量求AIC
+  q<-4
+  s<-combn(c(1:6),4)#####从6个变量中选出4个的所有可能结果
+  m<-array(0,dim<-c(15,n,4))#####产生4个15*n所有元素都是0的矩阵
+  betta4<-matrix(0,6,15)
+  AIC4<-c()
+  for(i in 1:15)
+  {
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]],x[,s[4,i]])
+    xq<-m[i,,]#####四个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC4[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta4[s[1,i],i]<-p[1,1]
+    betta4[s[2,i],i]<-p[2,1]
+    betta4[s[3,i],i]<-p[3,1]
+    betta4[s[4,i],i]<-p[4,1]
+  }
+  AIC4
+  betta4
+  #####5个变量求AIC
+  q<-5
+  AIC5<-c()
+  s<-combn(c(1:6),5)#####从6个变量中选出5个的所有可能结果
+  betta5<-matrix(0,6,6)
+  for(i in 1:6)
+  {
+    xq<-x[,-i]####5个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC5[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta5[s[1,i],i]<-p[1,1]
+    betta5[s[2,i],i]<-p[2,1]
+    betta5[s[3,i],i]<-p[3,1]
+    betta5[s[4,i],i]<-p[4,1]
+    betta5[s[5,i],i]<-p[5,1]
+  }
+  AIC5
+  betta5
+  ######6个变量求AIC
+  q<-6
+  xq<-x####6个变量的xq
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  AIC6<-n*log(SSeq)+2*q
+  betta6<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta6
+  AIC6
+  betta<-matrix(c(betta1,betta2,betta3,betta4,betta5,betta6),6,63)
+  AIC<-c(AIC1,AIC2,AIC3,AIC4,AIC5,AIC6)#####所有的AIC结果
+  t<-which.min(AIC)####找出最小的AIC对应的组合
+  beta3<-betta[,t]####输出beta
+  return(beta3)
+  }
+else if(method==4)
+{
+  m<-c()
+  beta4<-solve(t(x)%*%x)%*%t(x)%*%y
+  c<-solve(t(x)%*%x)
+  for(j in 1:6)
+  {
+    cjj<-(c[j,j])^(1/2)
+    e1<-y-x%*%beta4
+    se<-((sum(e1^2))/(n-6))^(1/2)
+    m[j]<-beta4[j]/(cjj*se)
+    if(m[j]<=qt(0.975,n-6))#####假定显著性水平α=0.05
+    {beta4[j]=0}
+  }
+  beta4<-c(beta4)####输出beta
+  return(beta4)
+}
+}
+
+#####计数及结果展示
+count<-function(n1,n2,n3,n4,n5,n6,n7,n8)
+{
+  beta<-matrix(c(1,0.8,0.6,0,0,0),6,1)#####产生beta
+  e<-rnorm(100,0,2)####产生误差项
+  sigma<-diag(6)####多元正态分布的协方差矩阵
+  mu<-matrix(c(0,0,0,0,0,0),6,1)####多元正态分布的均值向量
+  x<-mvrnorm(100,mu,sigma)####生成多元正态随机数
+  y<-x%*%beta+e####产生y
+  p1<-vs(x,y,1)
+  p2<-vs(x,y,2)
+  p3<-vs(x,y,3)
+  p4<-vs(x,y,4)
+  ####后三项均为0记一次正确，前三项有一个为0记一次错误
+  if(p1[4]==0&&p1[5]==0&&p1[6]==0)
+    {n1<-n1+1}
+  if(p1[1]==0|p1[2]==0|p1[3]==0)
+  {n2<-n2+1}
+  if(p2[4]==0&&p2[5]==0&&p2[6]==0)
+  {n3<-n3+1}
+  if(p2[1]==0|p2[2]==0|p2[3]==0)
+  {n4<-n4+1}
+  if(p3[4]==0&&p3[5]==0&&p3[6]==0)
+  {n5<-n5+1}
+  if(p3[1]==0|p3[2]==0|p3[3]==0)
+  {n6<-n6+1}
+  if(p4[4]==0&&p4[5]==0&&p4[6]==0)
+  {n7<-n7+1}
+  if(p4[1]==0|p4[2]==0|p4[3]==0)
+  {n8<-n8+1}
+  nn<-c(n1,n2,n3,n4,n5,n6,n7,n8)
+  return(nn)
+}
+t<-array(0,dim<-c(8,1000))####生成一个8*1000所有元素均为0的数组
+for(i in 1:1000)
+{
+  t[ ,i]<-count(0,0,0,0,0,0,0,0)####记录每一次的判断结果,每种方法若正确或者错误,相对应的t的分量为1
+}
+result<-c(sum(t[1,]),sum(t[2,]),sum(t[3,]),sum(t[4,]),sum(t[5,]),sum(t[6,]),sum(t[7,]),sum(t[8,]))
+####对正确的和错误的次数求和
+correct<-as.matrix(c(result[1],result[3],result[5],result[7]))
+incorrect<-as.matrix(c(result[2],result[4],result[6],result[8]))
+res<-data.frame(correct,incorrect)
+rownames(res)<-c("Lasso","BIC","AIC","普通回归")
+res####输出结果
+```
+

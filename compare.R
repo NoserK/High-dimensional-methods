@@ -1,0 +1,167 @@
+#' Model comparison
+#'
+#' Compare fitted models on LOO or WAIC.
+#'
+#' @export
+#' @param ... At least two objects returned by \code{\link{loo}} (or
+#'   \code{\link{waic}}).
+#' @param x A list of at least two objects returned by \code{\link{loo}} (or
+#'   \code{\link{waic}}). This argument can be used as an alternative to
+#'   specifying the objects in \code{...}.
+#'
+#' @return A vector or matrix with class \code{'compare.loo'} that has its own
+#'   print method. If exactly two objects are provided in \code{...} or
+#'   \code{x}, then the difference in expected predictive accuracy and the
+#'   standard error of the difference are returned. If more than two objects are
+#'   provided then a matrix of summary information is returned (see
+#'   \strong{Details}).
+#'
+#' @details
+#'   When comparing two fitted models, we can estimate the difference in their
+#'   expected predictive accuracy by the difference in \code{elpd_loo} or
+#'   \code{elpd_waic} (or multiplied by \eqn{-2}, if desired, to be on the
+#'   deviance scale).
+#'
+#'   \emph{When that difference, \code{elpd_diff}, is positive then the expected
+#'   predictive accuracy for the second model is higher. A negative
+#'   \code{elpd_diff} favors the first model.}
+#'
+#'   When using \code{compare()} with more than two models, the values in the
+#'   \code{elpd_diff} and \code{se_diff} columns of the returned matrix are
+#'   computed by making pairwise comparisons between each model and the model
+#'   with the best ELPD (i.e., the model in the first row).
+#'   Although the \code{elpd_diff} column is equal to the difference in
+#'   \code{elpd_loo}, do not expect the \code{se_diff} column to be equal to the
+#'   the difference in \code{se_elpd_loo}.
+#'
+#'   To compute the standard error of the difference in ELPD we use a
+#'   paired estimate to take advantage of the fact that the same set of \eqn{N}
+#'   data points was used to fit both models. These calculations should be most
+#'   useful when \eqn{N} is large, because then non-normality of the
+#'   distribution is not such an issue when estimating the uncertainty in these
+#'   sums. These standard errors, for all their flaws, should give a better
+#'   sense of uncertainty than what is obtained using the current standard
+#'   approach of comparing differences of deviances to a Chi-squared
+#'   distribution, a practice derived for Gaussian linear models or
+#'   asymptotically, and which only applies to nested models in any case.
+#'
+#' @template loo-and-psis-references
+#'
+#' @examples
+#' \dontrun{
+#' loo1 <- loo(log_lik1)
+#' loo2 <- loo(log_lik2)
+#' print(compare(loo1, loo2), digits = 3)
+#' print(compare(x = list(loo1, loo2)))
+#'
+#' waic1 <- waic(log_lik1)
+#' waic2 <- waic(log_lik2)
+#' compare(waic1, waic2)
+#' }
+#'
+compare <- function(..., x = list()) {
+  dots <- list(...)
+  if (length(dots)) {
+    if (length(x)) {
+      stop("If 'x' is specified then '...' should not be specified.",
+           call. = FALSE)
+    }
+    nms <- as.character(match.call(expand.dots = TRUE))[-1L]
+  } else {
+    if (!is.list(x) || !length(x)) {
+      stop("'x' must be a list.", call. = FALSE)
+    }
+    dots <- x
+    nms <- names(dots)
+    if (!length(nms)) {
+      nms <- paste0("model", seq_along(dots))
+    }
+  }
+
+  if (!all(sapply(dots, is.loo))) {
+    stop("All inputs should have class 'loo'.")
+  }
+  if (length(dots) <= 1L) {
+    stop("'compare' requires at least two models.")
+  } else if (length(dots) == 2L) {
+    loo1 <- dots[[1]]
+    loo2 <- dots[[2]]
+    comp <- compare_two_models(loo1, loo2)
+    return(comp)
+  } else {
+    Ns <- sapply(dots, function(x) nrow(x$pointwise))
+    if (!all(Ns == Ns[1L])) {
+      stop("Not all models have the same number of data points.", call. = FALSE)
+    }
+
+    x <- sapply(dots, function(x) {
+      est <- x$estimates
+      setNames(c(est), nm = c(rownames(est), paste0("se_", rownames(est))) )
+    })
+    colnames(x) <- nms
+    rnms <- rownames(x)
+    comp <- x
+    ord <- order(x[grep("^elpd", rnms), ], decreasing = TRUE)
+    comp <- t(comp)[ord, ]
+    patts <- c("elpd", "p_", "^waic$|^looic$", "^se_waic$|^se_looic$")
+    col_ord <- unlist(sapply(patts, function(p) grep(p, colnames(comp))),
+                      use.names = FALSE)
+    comp <- comp[, col_ord]
+
+    # compute elpd_diff and se_elpd_diff relative to best model
+    rnms <- rownames(comp)
+    diffs <- mapply(elpd_diffs, dots[ord[1]], dots[ord])
+    elpd_diff <- apply(diffs, 2, sum)
+    se_diff <- apply(diffs, 2, se_elpd_diff)
+    comp <- cbind(elpd_diff = elpd_diff, se_diff = se_diff, comp)
+    rownames(comp) <- rnms
+    class(comp) <- c("compare.loo", class(comp))
+    comp
+  }
+}
+
+#' @rdname compare
+#' @export
+#' @param digits For the print method only, the number of digits to use when
+#'   printing.
+#' @param simplify For the print method only, should only the essential columns
+#'   of the summary matrix be printed when comparing more than two models? The
+#'   entire matrix is always returned, but by default only the most important
+#'   columns are printed.
+print.compare.loo <- function(x, ..., digits = 1, simplify = TRUE) {
+  xcopy <- x
+  if (NCOL(xcopy) >= 2 && simplify) {
+    patts <- "^elpd_|^se_diff|^p_|^waic$|^looic$"
+    xcopy <- xcopy[, grepl(patts, colnames(xcopy))]
+  }
+  print(.fr(xcopy, digits), quote = FALSE)
+  invisible(x)
+}
+
+
+
+# internal ----------------------------------------------------------------
+compare_two_models <- function(loo_a, loo_b, return = c("elpd_diff", "se"), check_dims = TRUE) {
+  if (check_dims) {
+    if (dim(loo_a)[2] != dim(loo_b)[2]) {
+      stop(paste("Models don't have the same number of data points.",
+                 "\nFound N_1 =", dim(loo_a)[2], "and N_2 =", dim(loo_b)[2]),
+           call. = FALSE)
+    }
+  }
+
+  diffs <- elpd_diffs(loo_a, loo_b)
+  comp <- c(elpd_diff = sum(diffs), se = se_elpd_diff(diffs))
+  structure(comp, class = "compare.loo")
+}
+
+elpd_diffs <- function(loo_a, loo_b) {
+  pt_a <- loo_a$pointwise
+  pt_b <- loo_b$pointwise
+  elpd <- grep("^elpd", colnames(pt_a))
+  pt_b[, elpd] - pt_a[, elpd]
+}
+se_elpd_diff <- function(diffs) {
+  N <- length(diffs)
+  sqrt(N) * sd(diffs)
+}

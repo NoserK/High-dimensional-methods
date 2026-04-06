@@ -1,0 +1,482 @@
+---
+title: "201511150161王祖正线性模型作业"
+output: word_document
+---
+
+```{r cars}
+library(mvtnorm)
+library(MASS)
+fdata<-function(i,k)
+{
+  x<-mvrnorm(k,rep(0,6),diag(6))
+  e<-rnorm(k,0,2)
+  beta0true<-c(1.0,0.8,0.6,0,0,0)
+  y<-x%*%beta0true+e
+  samp<-list(x=x,y=y)
+  return(samp)
+}
+faic<-function(n,x,y,beta,k)
+{
+  SSeq<-t(y-x%*%beta)%*%(y-x%*%beta)
+  aicn<-k*log(SSeq)+2*n
+  return(aicn)
+}
+fbic<-function(n,x,y,beta,k)
+{
+  SSeq<-t(y-x%*%beta)%*%(y-x%*%beta)
+  bicn<-k*log(SSeq)+n/k*log(k)
+  return(bicn)
+}
+flasso<-function(x,y,k)
+{
+  lambda<-seq(0.01,1,0.01)
+  m1<-matrix(rep(0,100),6,100) ####生成一个矩阵，存放所有beta的结果
+  gcv<-matrix(rep(0,100),1,100) ####生成一个矩阵，存放所有GCV的结果
+  aic1<-matrix(rep(0,100),1,100)####生成一个矩阵，存放所有AIC的结果
+  bic1<-matrix(rep(0,100),1,100)####生成一个矩阵，存放所有BIC的结果
+  for (i in 1:100)  
+  { 
+    lam<-lambda[i] 
+    beta0<-(solve(t(x)%*%x)%*%t(x))%*%y
+    a<-matrix(rep(0,6),6,1) 
+    while(t(beta0-a)%*%(beta0-a)>10^-5)  ####收敛条件:直到前后两次迭代结果小于10^-5，停止循环
+    { 
+      bet<-matrix(rep(0,6),6,1) 
+      for(j in 1:6)
+      { 
+        if(abs(beta0[j,1]<1e-4)) 
+        {
+            beta0[j,1]<-10^-5
+        }
+        bet[j,1]<-1/abs(beta0[j,1])
+      }####如果beta0中某分量的值太小，则它的倒数取为10^5
+      beta11<-beta0-solve((t(x)%*%x)+k*lam*diag(c(bet)))%*%((-t(x))%*%(y-x%*%beta0)+k*lam*diag(c(bet))%*%beta0)
+      for(g in 1:6)
+      { 
+        if(abs(beta11[g,1])<0.1)
+          beta11[g,1]<-0 
+      } 
+      a<-beta0;
+      beta0<-beta11; 
+    }
+    m1[,i]<-beta0
+    bet<-beta0
+    for (l in 1:6)
+    { 
+      if (abs(beta0[l,1]<10^-4)) 
+        bet[l,1]<-10^-5
+    } 
+    p<-x%*%solve((t(x)%*%x)+k*lam*diag(c(bet)))%*%t(x)
+    tr<-sum(diag(p)) 
+    t1<-t(y-x%*%beta0)%*%(y-x%*%beta0) 
+    gcv[1,i]<-(t(y-x%*%beta0))%*%(y-x%*%beta0)/(1-tr/k)^2
+    n=sum(ifelse(m1[,i]>1e-5,1,0))
+    aic1[1,i]<-faic(n,x,y,m1[,i],k)
+    bic1[1,i]<-fbic(n,x,y,m1[,i],k)
+  }
+  gcvmin<-which.min(gcv)
+  aicmin<-which.min(aic1)
+  bicmin<-which.min(bic1)
+  betagcv<-m1[,gcvmin]
+  betaaic<-m1[,aicmin]
+  betabic<-m1[,bicmin]
+  return(list(betagcv=betagcv,betaaic=betaaic,betabic=betabic,gcvmin=gcvmin,aicmin=aicmin,bicmin=bicmin))
+}
+falasso<-function(x,y,k)
+{
+  betals<-solve(t(x)%*%x)%*%t(x)%*%y
+  lambda<-seq(0.01,1,0.01)
+  m2<-matrix(rep(0,100),6,100) ####生成一个矩阵，存放所有beta的结果
+  gcv2<-matrix(rep(0,100),1,100) ####生成一个矩阵，存放所有GCV的结果
+  aic2<-matrix(rep(0,100),1,100)####生成一个矩阵，存放所有AIC的结果
+  bic2<-matrix(rep(0,100),1,100)####生成一个矩阵，存放所有BIC的结果
+  for (i in 1:100)  
+  { 
+    lam<-lambda[i] 
+    beta0<-(solve(t(x)%*%x)%*%t(x))%*%y
+    a<-matrix(rep(0,6),6,1) 
+    while(t(beta0-a)%*%(beta0-a)>10^-5)
+    { 
+      bet<-matrix(rep(0,6),6,1) 
+      for(j in 1:6)
+      { 
+        if(abs(beta0[j,1]<1e-4)) 
+        {
+          beta0[j,1]<-10^-5
+        }
+        bet[j,1]<-1/abs(beta0[j,1])
+      } 
+      beta11<-beta0-solve((t(x)%*%x)+k*lam*diag(c(bet/betals)))%*%((-t(x))%*%(y-x%*%beta0)+k*lam*diag(c(bet/betals))%*%beta0)
+      for(g in 1:6)
+      { 
+        if(abs(beta11[g,1])<0.1)
+          beta11[g,1]<-0 
+      } 
+      a<-beta0;
+      beta0<-beta11; 
+    }
+    m2[,i]<-beta0
+    bet<-beta0
+    for (l in 1:6)
+    { 
+      if (abs(beta0[l,1]<10^-4)) 
+        bet[l,1]<-10^-5
+    } 
+    p<-x%*%solve((t(x)%*%x)+100*lam*diag(c(bet)))%*%t(x)
+    tr<-sum(diag(p)) 
+    t1<-t(y-x%*%beta0)%*%(y-x%*%beta0) 
+    gcv2[1,i]<-(t(y-x%*%beta0))%*%(y-x%*%beta0)/(1-tr/100)^2
+    n=sum(ifelse(m2[,i]>1e-5,1,0))
+    aic2[1,i]<-faic(n,x,y,m2[,i],k)
+    bic2[1,i]<-fbic(n,x,y,m2[,i],k)
+  }
+  gcvmin2<-which.min(gcv2)
+  aicmin2<-which.min(aic2)
+  bicmin2<-which.min(bic2)
+  betagcv2<-m2[,gcvmin2]
+  betaaic2<-m2[,aicmin2]
+  betabic2<-m2[,bicmin2]
+  return(list(betagcv2=betagcv2,betaaic2=betaaic2,betabic2=betabic2,aicmin2=aicmin2,bicmin2=bicmin2,gcvmin2=gcvmin2))
+}
+fsubsetbic<-function(x,y,n)
+{
+  q<-1
+  s<-combn(c(1:6),1)#####从6个变量中选出1个的所有可能结果
+  m<-array(0,dim<-c(6,n,1))#####产生1个6*n所有元素都是0的矩阵
+  betta1<-matrix(0,6,6)
+  BIC1<-c()
+  for(i in 1:6){
+    m[i, , ]<-cbind(x[,s[1,i]])
+    xq<-m[i,,]######只用一个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    BIC1[i]<-log(SSeq/n)+q/n*log(n)
+    betta1[i,i]<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  }
+  betta1
+  BIC1
+  ####两个变量求BIC
+  q<-2
+  s<-combn(c(1:6),2)######从6个变量中选出2个的所有可能结果
+  m<-array(0,dim<-c(15,n,2))#####产生2个15*n所有元素都是0的矩阵
+  BIC2<-c()
+  betta2<-matrix(0,6,15)
+  for(i in 1:15){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]])
+    xq<-m[i,,]######用两个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    BIC2[i]<-log(SSeq/n)+q/n*log(n)
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta2[s[1,i],i]<-p[1,1]
+    betta2[s[2,i],i]<-p[2,1]
+  }
+  BIC2
+  betta2
+  ######三个变量求BIC
+  q<-3
+  s<-combn(c(1:6),3)######从6个变量中选出3个的所有可能结果
+  m<-array(0,dim<-c(20,n,3))#####产生3个20*n所有元素都是0的矩阵
+  betta3<-matrix(0,6,20)
+  BIC3<-c()
+  for(i in 1:20){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]])
+    xq<-m[i,,]####选三个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    BIC3[i]<-log(SSeq/n)+q/n*log(n)
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta3[s[1,i],i]<-p[1,1]
+    betta3[s[2,i],i]<-p[2,1]
+    betta3[s[3,i],i]<-p[3,1]
+  }
+  betta3
+  BIC3
+  ####四个变量求BIC
+  q<-4
+  s<-combn(c(1:6),4)######从6个变量中选出4个的所有可能结果
+  m<-array(0,dim<-c(15,n,4))#####产生4个15*n所有元素都是0的矩阵
+  betta4<-matrix(0,6,15)
+  BIC4<-c()
+  for(i in 1:15){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]],x[,s[4,i]])
+    xq<-m[i,,]####选四个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    BIC4[i]<-log(SSeq/n)+q/n*log(n)
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta4[s[1,i],i]<-p[1,1]
+    betta4[s[2,i],i]<-p[2,1]
+    betta4[s[3,i],i]<-p[3,1]
+    betta4[s[4,i],i]<-p[4,1]
+  }
+  BIC4
+  betta4
+  ####5个变量求BIC
+  q<-5
+  BIC5<-c()
+  s<-combn(c(1:6),5)
+  betta5<-matrix(0,6,6)
+  for(i in 1:6){
+    xq<-x[,-i]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    BIC5[i]<-log(SSeq/n)+q/n*log(n)
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta5[s[1,i],i]<-p[1,1]
+    betta5[s[2,i],i]<-p[2,1]
+    betta5[s[3,i],i]<-p[3,1]
+    betta5[s[4,i],i]<-p[4,1]
+    betta5[s[5,i],i]<-p[5,1]
+  }
+  BIC5
+  betta5
+  #####6个变量求BIC
+  q<-6
+  xq<-x
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  BIC6<-log(SSeq/n)+q/n*log(n)
+  betta6<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta6
+  BIC6
+  
+  betta<-matrix(c(betta1,betta2,betta3,betta4,betta5,betta6),6,63)
+  BIC<-c(BIC1,BIC2,BIC3,BIC4,BIC5,BIC6)
+  t<-which.min(BIC)
+  betabic<-betta[,t]
+  return(betabic)
+}
+fsubsetaic=function(x,y,n)
+{
+  q<-1
+  betta1<-matrix(0,6,6)
+  s<-combn(c(1:6),1)#####从6个变量中选出1个的所有可能结果
+  m<-array(0,dim<-c(6,n,1))#####产生6个n*1所有元素都是0的矩阵
+  AIC1<-c()
+  for(i in 1:6){
+    m[i, , ]<-cbind(x[,s[1,i]])######只用一个变量的xq
+    xq<-m[i,,]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC1[i]<-n*log(SSeq)+2*q####计算AIC
+    betta1[i,i]<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  }
+  AIC1
+  betta1
+  ####两个变量求AIC
+  q<-2
+  s<-combn(c(1:6),2)#####从6个变量中选出2个的所有可能结果
+  m<-array(0,dim<-c(15,n,2))#####产生2个15*n所有元素都是0的矩阵
+  betta2<-matrix(0,6,15)
+  AIC2<-c()
+  for(i in 1:15){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]])#####两个变量的xq
+    xq<-m[i,,]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC2[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta2[s[1,i],i]<-p[1,1]
+    betta2[s[2,i],i]<-p[2,1]
+  }
+  AIC2
+  betta2
+  ####三个变量求AIC
+  q<-3
+  s<-combn(c(1:6),3)#####从6个变量中选出3个的所有可能结果
+  m<-array(0,dim<-c(20,n,3))#####产生3个20*n所有元素都是0的矩阵
+  betta3<-matrix(0,6,20)
+  AIC3<-c()
+  for(i in 1:20){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]])#####三个变量的xq
+    xq<-m[i,,]
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC3[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta3[s[1,i],i]<-p[1,1]
+    betta3[s[2,i],i]<-p[2,1]
+    betta3[s[3,i],i]<-p[3,1]
+  }
+  AIC3
+  betta3
+  #####四个变量求AIC
+  q<-4
+  s<-combn(c(1:6),4)#####从6个变量中选出4个的所有可能结果
+  m<-array(0,dim<-c(15,n,4))#####产生4个15*n所有元素都是0的矩阵
+  betta4<-matrix(0,6,15)
+  AIC4<-c()
+  for(i in 1:15){
+    m[i, , ]<-cbind(x[,s[1,i]],x[,s[2,i]],x[,s[3,i]],x[,s[4,i]])
+    xq<-m[i,,]#####四个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC4[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta4[s[1,i],i]<-p[1,1]
+    betta4[s[2,i],i]<-p[2,1]
+    betta4[s[3,i],i]<-p[3,1]
+    betta4[s[4,i],i]<-p[4,1]
+  }
+  AIC4
+  betta4
+  #####5个变量求AIC
+  q<-5
+  AIC5<-c()
+  s<-combn(c(1:6),5)#####从6个变量中选出5个的所有可能结果
+  betta5<-matrix(0,6,6)
+  for(i in 1:6){
+    xq<-x[,-i]####5个变量的xq
+    SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+    AIC5[i]<-n*log(SSeq)+2*q
+    p<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+    betta5[s[1,i],i]<-p[1,1]
+    betta5[s[2,i],i]<-p[2,1]
+    betta5[s[3,i],i]<-p[3,1]
+    betta5[s[4,i],i]<-p[4,1]
+    betta5[s[5,i],i]<-p[5,1]
+  }
+  AIC5
+  betta5
+  ######6个变量求AIC
+  q<-6
+  xq<-x####6个变量的xq
+  SSeq<-t(y)%*%(diag(n)-xq%*%solve(t(xq)%*%xq)%*%t(xq))%*%y
+  AIC6<-n*log(SSeq)+2*q
+  betta6<-solve(t(xq)%*%xq)%*%t(xq)%*%y
+  betta6
+  AIC6
+  
+  betta<-matrix(c(betta1,betta2,betta3,betta4,betta5,betta6),6,63)
+  AIC<-c(AIC1,AIC2,AIC3,AIC4,AIC5,AIC6)#####所有的AIC结果
+  t<-which.min(AIC)####找出最小的AIC对应的组合
+  betaaic<-betta[,t]####输出beta
+  return(betaaic)
+}
+fdo<-function(t)
+{
+  corlassoaic=0
+  corlassobic=0
+  corlassogcv=0
+  coralassoaic=0
+  coralassobic=0
+  coralassogcv=0
+  corsubaic=0
+  corsubbic=0
+  incorlassoaic=0
+  incorlassobic=0
+  incorlassogcv=0
+  incoralassoaic=0
+  incoralassobic=0
+  incoralassogcv=0
+  incorsubaic=0
+  incorsubbic=0
+  eq1=0
+  eq1i=c()
+  eq1betabic<-matrix(rep(0,120),6,20)
+  eq1betagcv<-matrix(rep(0,120),6,20)
+  eq2=0
+  eq2i=c()
+  eq2betabic<-matrix(rep(0,120),6,20)
+  eq2betagcv<-matrix(rep(0,120),6,20)
+  eqal=list(eq1=eq1,eq1i=eq1i,eq1betabic=eq1betabic,eq1betagcv=eq1betagcv)
+  eqgg=list(eq2=eq2,eq2i=eq2i,eq2betabic=eq2betabic,eq2betagcv=eq2betagcv)
+  for(i in 1:1000)
+  {
+    data<-fdata(i,t)
+    lassores<-flasso(data$x,data$y,t)
+    lassoaicres<-lassores$betaaic
+    lassobicres<-lassores$betabic
+    lassogcvres<-lassores$betagcv
+    alassores<-falasso(data$x,data$y,t)
+    alassoaicres<-alassores$betaaic2
+    alassobicres<-alassores$betabic2
+    alassogcvres<-alassores$betagcv2
+    alssominbic<-alassores$bicmin2
+    alssomingcv<-alassores$gcvmin2
+    subaicres<-fsubsetaic(data$x,data$y,t)
+    subbicres<-fsubsetbic(data$x,data$y,t)
+    if(lassoaicres[4]==0&&lassoaicres[5]==0&&lassoaicres[6]==0)
+    {
+      corlassoaic=corlassoaic+1
+    }
+    if(lassoaicres[1]==0|lassoaicres[2]==0|lassoaicres[3]==0)
+    {
+      incorlassoaic=incorlassoaic+1
+    }
+    if(lassobicres[4]==0&&lassobicres[5]==0&&lassobicres[6]==0)
+    {
+      corlassobic=corlassobic+1
+    }
+    if(lassobicres[1]==0|lassobicres[2]==0|lassobicres[3]==0)
+    {
+      incorlassobic=incorlassobic+1
+    }
+    if(lassogcvres[4]==0&&lassogcvres[5]==0&&lassogcvres[6]==0)
+    {
+      corlassogcv=corlassogcv+1
+    }
+    if(lassogcvres[1]==0|lassogcvres[2]==0|lassogcvres[3]==0)
+    {
+      incorlassogcv=incorlassogcv+1
+    }
+    if(alassoaicres[4]==0&&alassoaicres[5]==0&&alassoaicres[6]==0)
+    {
+      coralassoaic=coralassoaic+1
+    }
+    if(alassoaicres[1]==0|alassoaicres[2]==0|alassoaicres[3]==0)
+    {
+      incoralassoaic=incoralassoaic+1
+    }
+    if(alassobicres[4]==0&&alassobicres[5]==0&&alassobicres[6]==0)
+    {
+      coralassobic=coralassobic+1
+    }
+    if(alassobicres[1]==0|alassobicres[2]==0|alassobicres[3]==0)
+    {
+      incoralassobic=incoralassobic+1
+    }
+    if(alassogcvres[4]==0&&alassogcvres[5]==0&&alassogcvres[6]==0)
+    {
+      coralassogcv=coralassogcv+1
+    }
+    if(alassogcvres[1]==0|alassogcvres[2]==0|alassogcvres[3]==0)
+    {
+      incoralassogcv=incoralassogcv+1
+    }
+    if(subbicres[4]==0&&subbicres[5]==0&&subbicres[6]==0)
+    {
+      corsubbic=corsubbic+1
+    }
+    if(subbicres[1]==0|subbicres[2]==0|subbicres[3]==0)
+    {
+      incorsubbic=incorsubbic+1
+    }
+    if(subaicres[4]==0&&subaicres[5]==0&&subaicres[6]==0)
+    {
+      corsubaic=corsubaic+1
+    }
+    if(subaicres[1]==0|subaicres[2]==0|subaicres[3]==0)
+    {
+      incorsubaic=incorsubaic+1
+    }
+    if(coralassobic==coralassogcv&&alssominbic==alssomingcv&&i<=20)
+    {
+      eqal$eq1=eqal$eq1+1
+      eqal$eq1i=c(eqal$eq1i,i)
+      eqal$eq1betabic[,i]=matrix(alassores$betabic2,6,1)
+      eqal$eq1betagcv[,i]=matrix(alassores$betagcv2,6,1)
+    }
+    if(corlassogcv==coralassogcv)
+    {
+      eqgg$eq2=eqal$eq2+1
+      eqgg$eq2i=c(eqgg$eq2i,i)
+      eqgg$eq2betabic[,i]=matrix(alassores$betabic2,6,1)
+      eqgg$eq2betagcv[,i]=matrix(alassores$betagcv2,6,1)
+    }
+  }
+  correct=as.matrix(c(corlassoaic,corlassobic,coralassogcv,coralassoaic,coralassobic,coralassogcv,corsubaic,corsubbic))
+  incorrect=as.matrix(c(incorlassoaic,incorlassobic,incoralassogcv,incoralassoaic,incoralassobic,incoralassogcv,incorsubaic,incorsubbic))
+  res<-data.frame(correct,incorrect)
+  rownames(res)<-c("lassoaic","lassobic","lassogcv","adaptive lassoaic","adaptive lassobic","adaptive lassogcv","subsetaic","subsetbic")
+  resu<-list(res=res,eqal=eqal,eqgg=eqgg)
+}
+finalres100<-fdo(100)
+finalres200<-fdo(200)
+finalres500<-fdo(500)
+finalres100
+finalres200
+finalres500
+
+```

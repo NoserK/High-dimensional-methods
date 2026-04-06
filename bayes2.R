@@ -1,0 +1,143 @@
+#3.1
+library(coda)
+M=10000
+fgamma<-function(a,b,x)
+{
+  x^(a-1)*exp(-b*x)
+}
+xt0<-rgamma(M,4.3,6.2)
+xt1=numeric(M)
+xt2=numeric(M)
+x<-rgamma(50,4.3,6.2)
+y1<-rgamma(M,4,7)
+y2<-rgamma(M,5,6)
+xt1[1]=0.5
+xt2[1]=0.5
+u1<-runif(M)
+u2<-runif(M)
+k1=0
+k2=0
+t0<-mcmc(xt0)
+for(i in 2:M)
+{
+  fy<-dgamma(y1[i],4.3,6.2)*dgamma(xt1[i-1],4,7)
+  fx<-dgamma(xt1[i-1],4.3,6.2)*dgamma(y1[i],4,7)
+  r<-fy/fx
+  if(u1[i]<=r)
+  {
+    xt1[i]<-y1[i]
+    k1=k1+1
+  }
+  else
+  {
+    xt1[i]<-xt1[i-1]
+  }
+}
+t1<-mcmc(xt1)
+for(i in 2:M)
+{
+  fy<-dgamma(y2[i],4.3,6.2)*dgamma(xt1[i-1],5,6)
+  fx<-dgamma(xt2[i-1],4.3,6.2)*dgamma(y1[i],5,6)
+  r<-fy/fx
+  if(u2[i]<=r)
+  {
+    xt2[i]<-y1[i]
+    k2=k2+1
+  }
+  else
+  {
+    xt2[i]<-xt2[i-1]
+  }
+} 
+t2<-mcmc(xt2)
+combinedchains01=mcmc.list(t0, t1)
+plot(combinedchains01)
+gelman.diag(combinedchains01)
+gelman.plot(combinedchains01)
+combinedchains02=mcmc.list(t0, t2)
+plot(combinedchains02)
+gelman.diag(combinedchains02)
+gelman.plot(combinedchains02)
+hist(xt0,nclass=50,probability=T)
+lines(density(xt0))
+hist(xt1,nclass=50,probability=T)
+lines(density(xt1))
+hist(xt2,nclass=50,probability=T)
+lines(density(xt2))
+plot(t1)
+summary(t1)
+plot(t2)
+summary(t2)
+sum(xt1[2000:10000])/8000
+k1/M
+sum(xt2[2000:10000])/8000
+k2/M
+#3.2
+M=40000
+xt0<-rt(M,4)
+xt1=numeric(M)
+xt2=numeric(M)
+x<-rt(50,4)
+y1<-rnorm(M)
+y2<-rt(M,2)
+xt1[1]=0.5
+xt2[1]=0.5
+u1<-runif(M)
+u2<-runif(M)
+k1=0
+k2=0
+t0<-mcmc(xt0)
+for(i in 2:M)
+{
+  fx<-dnorm(y1[i],0,1)*dt(xt1[i-1],4)
+  fy<-dnorm(xt1[i-1],0,1)*dt(y1[i],4)
+  r<-prod(fy/fx)
+  if(u1[i]<=r)
+  {
+    xt1[i]<-y1[i]
+    k1=k1+1
+  }
+  else
+  {
+    xt1[i]<-xt1[i-1]
+  }
+} 
+t1<-mcmc(xt1)
+for(i in 2:M)
+{
+  fx<-dt(y2[i],2)*dt(xt2[i-1],4)
+  fy<-dt(xt2[i-1],2)*dt(y2[i],4)
+  r<-prod(fy/fx)
+  if(u2[i]<=r)
+  {
+    xt2[i]<-y1[i]
+    k2=k2+1
+  }
+  else
+  {
+    xt2[i]<-xt2[i-1]
+  }
+} 
+t2<-mcmc(xt2)
+combinedchains01=mcmc.list(t0, t1)
+plot(combinedchains01)
+gelman.diag(combinedchains01)
+gelman.plot(combinedchains01)
+combinedchains02=mcmc.list(t0, t2)
+plot(combinedchains02)
+gelman.diag(combinedchains02)
+gelman.plot(combinedchains02)
+hist(xt0,nclass=50,probability=T)
+lines(density(xt0))
+hist(xt1,nclass=50,probability=T)
+lines(density(xt1))
+hist(xt2,nclass=50,probability=T)
+lines(density(xt2))
+plot(t1)
+summary(t1)
+plot(t2)
+summary(t2)
+sum(xt1)/M
+k1/M
+sum(xt2)/M
+k2/M
